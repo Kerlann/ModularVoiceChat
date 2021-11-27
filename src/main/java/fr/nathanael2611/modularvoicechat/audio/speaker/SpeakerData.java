@@ -3,6 +3,7 @@ package fr.nathanael2611.modularvoicechat.audio.speaker;
 import fr.nathanael2611.modularvoicechat.audio.api.NoExceptionCloseable;
 import fr.nathanael2611.modularvoicechat.proxy.ClientProxy;
 import fr.nathanael2611.modularvoicechat.util.AudioUtil;
+import fr.nathanael2611.modularvoicechat.util.Occlusion;
 import fr.nathanael2611.modularvoicechat.util.ThreadUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.player.EntityPlayer;
@@ -24,6 +25,7 @@ public class SpeakerData implements NoExceptionCloseable
     private final Map<Integer, SpeakerLineInfo> sourceLines;
     private int volume;
     private final ScheduledFuture<?> cleanupTask;
+    private double lastOcclusion;
 
     public SpeakerData(String speakerName, int volume)
     {
@@ -138,13 +140,28 @@ public class SpeakerData implements NoExceptionCloseable
     {
         if (isAvailable(id))
         {
+            EntityPlayer speaker = (EntityPlayer) Minecraft.getMinecraft().world.getEntityByID(id);
             final SpeakerLineInfo lineInfo = sourceLines.get(id);
             float factor = (float) this.volume / 100;
+            double occlusion = Occlusion.getOccludedPercent(Minecraft.getMinecraft().world, Minecraft.getMinecraft().player, speaker.getPositionVector());
+            if(lastOcclusion >= 0) {
+                if(occlusion > lastOcclusion) {
+                    lastOcclusion = Math.max(lastOcclusion + 0.05, 0.0D);
+                } else {
+                    lastOcclusion = Math.max(lastOcclusion - 0.05, occlusion);
+                }
+
+                occlusion = lastOcclusion;
+            }
+            volumePercent *= (float) (1D - occlusion);
+            if(lastOcclusion == -1) {
+                lastOcclusion = occlusion;
+            }
             float vol = ((float) volumePercent / 100) * factor;
             array = AudioUtil.adjustVolume(array, vol);
             if(ClientProxy.getConfig().isStereo())
             {
-                EntityPlayer speaker = (EntityPlayer) Minecraft.getMinecraft().world.getEntityByID(id);
+
                 if (speaker != null)
                 {
                     try
